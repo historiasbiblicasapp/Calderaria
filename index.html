@@ -257,16 +257,20 @@
             </div>
           </div>
 
-          <!-- Trabalho a executar -->
           <div class="bg-white rounded-xl shadow p-6">
             <h3 class="font-semibold text-primary-800 border-b pb-2 mb-4">Trabalho que será Executado</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" id="trabalhos-checkboxes">
-              <!-- filled by JS -->
-            </div>
-            <div class="mt-4">
-              <label class="label">Outros (descrição)</label>
-              <input type="text" id="trabalho-outros" class="input" placeholder="Descreva se marcou OUTROS" />
-            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" id="trabalhos-checkboxes"></div>
+          </div>
+
+          <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="font-semibold text-primary-800 border-b pb-2 mb-4">Fotos da OS</h3>
+            <p class="text-sm text-slate-500 mb-3">Selecione fotos para guardar nesta ordem de serviço. Elas ficam salvas junto da OS para consulta depois.</p>
+            <label class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg cursor-pointer">
+              Selecionar fotos
+              <input type="file" id="fotos-input" accept="image/*" multiple class="hidden" />
+            </label>
+            <p id="fotos-vazio" class="text-sm text-slate-400 mt-4">Nenhuma foto anexada.</p>
+            <div id="fotos-grid" class="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
           </div>
 
           <!-- Execução -->
@@ -370,6 +374,9 @@
     </div>
   </div>
 
-  <script src="js/app.js"></script>
+  <div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 p-4" role="dialog">
+    <button type="button" id="lightbox-close" class="absolute top-4 right-4 text-white text-sm bg-black/40 px-3 py-1.5 rounded-lg">Fechar</button>
+    <img id="lightbox-img" alt="Foto da OS" class="max-h-[90vh] max-w-full rounded-lg shadow-2xl" />
+  </div>
 </body>
 </html>

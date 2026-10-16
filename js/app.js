@@ -14,16 +14,21 @@ const USERS = [
 
 // ─── TRABALHOS (checkboxes do formulário original) ───────────────────────────
 const TRABALHOS = [
-  'DESAMASSAR', 'FURAÇÃO', 'REMOVER GRAXA', 'JATEAR',
-  'DESEMPENAR', 'REMOVER ÓLEO', 'EXCESSO DE Zn', 'CORTAR',
-  'SOLDAR', 'REMOVER TINTA', 'LIXAR', 'METALIZAR',
-  'DESPLACAMENTO', 'PONTOS NÚS', 'OUTROS'
+  'Desamassar',
+  'Desempenar',
+  'Soldar Olhal',
+  'Soldar Quebrado',
+  'Furação',
+  'Remover Óleo',
+  'Remover Graxa',
+  'Remover Tinta',
 ];
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let currentUser = null;
 let editingId = null;
 let viewId = null;
+let pendingFotos = [];
 
 const STORAGE_KEY = 'calderaria_os';
 const SESSION_KEY = 'calderaria_session';
@@ -98,6 +103,97 @@ function statusBadge(s) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
+const MAX_FOTOS = 12;
+
+function renderFotosGrid() {
+  const grid = document.getElementById('fotos-grid');
+  const empty = document.getElementById('fotos-vazio');
+  if (!grid || !empty) return;
+  empty.classList.toggle('hidden', pendingFotos.length > 0);
+  grid.innerHTML = pendingFotos.map((src, i) => `
+    <div class="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+      <button type="button" class="foto-thumb block w-full" data-i="${i}">
+        <img src="${src}" alt="Foto ${i + 1}" class="w-full h-28 object-cover" />
+      </button>
+      <button type="button" data-rm="${i}" class="absolute top-1 right-1 bg-black/60 text-white text-xs px-2 py-0.5 rounded">Remover</button>
+    </div>
+  `).join('');
+  grid.querySelectorAll('.foto-thumb').forEach(btn => {
+    btn.addEventListener('click', () => openLightbox(pendingFotos[Number(btn.dataset.i)]));
+  });
+  grid.querySelectorAll('[data-rm]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pendingFotos.splice(Number(btn.dataset.rm), 1);
+      renderFotosGrid();
+    });
+  });
+}
+
+function openLightbox(src) {
+  if (!src) return;
+  const box = document.getElementById('lightbox');
+  document.getElementById('lightbox-img').src = src;
+  box.classList.remove('hidden');
+  box.classList.add('flex');
+}
+
+function closeLightbox() {
+  const box = document.getElementById('lightbox');
+  box.classList.add('hidden');
+  box.classList.remove('flex');
+  document.getElementById('lightbox-img').removeAttribute('src');
+}
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('leitura'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1280;
+        let w = img.width;
+        let h = img.height;
+        if (w > max || h > max) {
+          const r = Math.min(max / w, max / h);
+          w = Math.round(w * r);
+          h = Math.round(h * r);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = () => reject(new Error('imagem'));
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onFotosSelected(e) {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+  const room = MAX_FOTOS - pendingFotos.length;
+  if (room <= 0) {
+    toast('Limite de 12 fotos por OS');
+    return;
+  }
+  const slice = files.slice(0, room);
+  if (files.length > room) toast('Limite de 12 fotos: algumas não foram incluídas');
+  for (const file of slice) {
+    if (!file.type.startsWith('image/')) continue;
+    try {
+      pendingFotos.push(await compressImage(file));
+    } catch {
+      toast('Não foi possível ler uma das fotos');
+    }
+  }
+  renderFotosGrid();
+}
+
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 function tryLogin(user, pass) {
   return USERS.find(u => u.user === user && u.pass === pass) || null;
@@ -170,9 +266,10 @@ function buildTrabalhoCheckboxes() {
 
 function resetForm() {
   editingId = null;
+  pendingFotos = [];
   document.getElementById('form-os').reset();
   document.getElementById('os-id').value = '';
-  // default dates
+  renderFotosGrid();
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('data-abertura').value = today;
   const now = new Date();
@@ -201,7 +298,8 @@ function fillForm(os) {
   document.querySelectorAll('input[name="trabalho"]').forEach(c => {
     c.checked = (os.trabalhos || []).includes(c.value);
   });
-  document.getElementById('trabalho-outros').value = os.trabalhoOutros || '';
+  pendingFotos = Array.isArray(os.fotos) ? os.fotos.slice() : [];
+  renderFotosGrid();
   document.getElementById('resp-execucao').value = os.respExecucao || '';
   document.getElementById('data-inicio').value = os.dataInicio || '';
   document.getElementById('hora-inicio').value = os.horaInicio || '';
@@ -230,7 +328,7 @@ function collectForm() {
     horaAbertura: document.getElementById('hora-abertura').value,
     respAbertura: document.getElementById('resp-abertura').value.trim(),
     trabalhos,
-    trabalhoOutros: document.getElementById('trabalho-outros').value.trim(),
+    fotos: pendingFotos.slice(),
     respExecucao: document.getElementById('resp-execucao').value.trim(),
     dataInicio: document.getElementById('data-inicio').value,
     horaInicio: document.getElementById('hora-inicio').value,
@@ -344,6 +442,13 @@ function viewOS(id) {
   const trabalhosHtml = (os.trabalhos || []).length
     ? (os.trabalhos || []).map(t => `<span class="badge badge-72h mr-1 mb-1">${t}</span>`).join('')
     : '—';
+  const fotos = Array.isArray(os.fotos) ? os.fotos : [];
+  const fotosHtml = fotos.length
+    ? `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">${fotos.map((src, i) => `
+        <button type="button" class="foto-view block rounded-lg overflow-hidden border border-slate-200 bg-slate-50" data-i="${i}">
+          <img src="${src}" alt="Foto ${i + 1}" class="w-full h-32 object-cover" />
+        </button>`).join('')}</div>`
+    : '<p class="text-sm text-slate-400">Nenhuma foto anexada.</p>';
 
   document.getElementById('detalhe-conteudo').innerHTML = `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -372,7 +477,10 @@ function viewOS(id) {
     <div>
       <h3 class="text-sm font-semibold text-slate-500 uppercase mb-2">Trabalho a Executar</h3>
       <div class="flex flex-wrap gap-1">${trabalhosHtml}</div>
-      ${os.trabalhoOutros ? `<p class="text-sm mt-2 text-slate-600"><strong>Outros:</strong> ${os.trabalhoOutros}</p>` : ''}
+    </div>
+    <div>
+      <h3 class="text-sm font-semibold text-slate-500 uppercase mb-2">Fotos</h3>
+      ${fotosHtml}
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
@@ -393,6 +501,9 @@ function viewOS(id) {
       <p class="text-sm text-slate-700 whitespace-pre-wrap">${os.observacoes || '—'}</p>
     </div>
   `;
+  document.getElementById('detalhe-conteudo').querySelectorAll('.foto-view').forEach(btn => {
+    btn.addEventListener('click', () => openLightbox(fotos[Number(btn.dataset.i)]));
+  });
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
@@ -468,8 +579,8 @@ function seedIfEmpty() {
     dataAbertura: new Date().toISOString().slice(0, 10),
     horaAbertura: '09:00',
     respAbertura: 'Ayrton R.',
-    trabalhos: ['DESAMASSAR', 'SOLDAR', 'LIXAR'],
-    trabalhoOutros: '',
+    trabalhos: ['Desamassar', 'Soldar Olhal'],
+    fotos: [],
     respExecucao: '',
     dataInicio: '',
     horaInicio: '',
@@ -521,6 +632,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Form
   document.getElementById('form-os').addEventListener('submit', saveForm);
+  document.getElementById('fotos-input').addEventListener('change', onFotosSelected);
+  document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+  document.getElementById('lightbox').addEventListener('click', (e) => {
+    if (e.target.id === 'lightbox') closeLightbox();
+  });
   document.getElementById('btn-cancelar').addEventListener('click', () => {
     editingId = null;
     navigate('lista');
